@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>入金の見張り番</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2530;--sub:#5f6b7a;--line:#dde2e8;--accent:#1f6feb;--ok:#12805c;--warn:#b25e09;--bad:#c5362c;--chip:#eef1f5;--badbg:#fdecea;--warnbg:#fff4e2;--okbg:#e6f5ee}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#11161c;--card:#1a2129;--ink:#e6ebf1;--sub:#9aa6b4;--line:#2b3542;--accent:#6ea8ff;--ok:#4cc79a;--warn:#e6a94f;--bad:#f0857c;--chip:#242d38;--badbg:#3a2220;--warnbg:#3a2e1a;--okbg:#17302a}}
+:root[data-theme="dark"]{--bg:#11161c;--card:#1a2129;--ink:#e6ebf1;--sub:#9aa6b4;--line:#2b3542;--accent:#6ea8ff;--ok:#4cc79a;--warn:#e6a94f;--bad:#f0857c;--chip:#242d38;--badbg:#3a2220;--warnbg:#3a2e1a;--okbg:#17302a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:880px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:6px 0 0}
+h2{font-size:16px;margin:0 0 10px}
+.sub{color:var(--sub);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sum div{background:var(--chip);border-radius:10px;padding:10px}
+.sum b{display:block;font-size:19px}
+.sum .bad b{color:var(--bad)}
+label{display:block;font-size:12px;color:var(--sub);margin-top:8px}
+input,select,textarea{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+textarea{min-height:230px;line-height:1.7}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+@media (max-width:560px){.grid{grid-template-columns:1fr}.sum{grid-template-columns:1fr}}
+button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+button.sm{padding:4px 10px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.item{border-top:1px solid var(--line);padding:12px 0}
+.item:first-child{border-top:0;padding-top:0}
+.item .top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline;justify-content:space-between}
+.item .name{font-weight:600}
+.item .amt{font-weight:600;white-space:nowrap}
+.badge{display:inline-block;font-size:12px;padding:1px 9px;border-radius:999px;background:var(--chip);color:var(--sub);white-space:nowrap}
+.badge.bad{background:var(--badbg);color:var(--bad)}.badge.warn{background:var(--warnbg);color:var(--warn)}.badge.ok{background:var(--okbg);color:var(--ok)}
+.empty{color:var(--sub);text-align:center;padding:18px 0}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);width:min(640px,calc(100vw - 32px));padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+footer{color:var(--sub);font-size:12px;margin:18px 0 30px}
+</style>
+</head>
+<body>
+<main>
+<h1>入金の見張り番</h1>
+<div class="sub">請求した仕事の「入金期日」を見張り、遅れているものには催促の文面を用意します。登録不要・無料。データはこの端末の中だけに保存されます。</div>
+
+<div class="card"><div class="sum" id="sum"></div></div>
+
+<div class="card">
+<h2>請求の一覧</h2>
+<div id="list"></div>
+<div class="row"><button class="pri" id="addBtn">＋ 請求を追加</button><button id="sampleBtn">見本のデータを入れる</button></div>
+</div>
+
+<div class="card">
+<h2>設定とデータ</h2>
+<div class="grid">
+<div><label for="me">あなたの名前・屋号（催促文の差出人）</label><input id="me" placeholder="例：山田デザイン事務所　山田"></div>
+<div><label for="bank">振込先のメモ（催促文に入れる。空欄なら入れない）</label><input id="bank" placeholder="例：○○銀行 △△支店 普通 1234567"></div>
+</div>
+<div class="row"><button id="expBtn">バックアップを保存（JSON）</button><button id="csvBtn">一覧を CSV で保存</button><button id="impBtn">バックアップを読み込む</button><input type="file" id="impFile" accept="application/json" hidden></div>
+<div class="sub" style="margin-top:8px">ブラウザのデータを消すと一覧も消えます。ときどきバックアップを保存してください。</div>
+</div>
+
+<footer>文面は一般的なビジネスメールの例です。法律上の助言ではありません。支払いの遅れが続く場合は、契約書の内容を確認し、必要に応じて専門家や公的な相談窓口にご相談ください。<br>制作：ForgeNexusWorks</footer>
+</main>
+
+<dialog id="editDlg"><form method="dialog" id="editForm">
+<h2 id="editTitle">請求を追加</h2>
+<div class="grid">
+<div><label for="fClient">取引先</label><input id="fClient" required placeholder="例：株式会社サンプル"></div>
+<div><label for="fTitle">件名</label><input id="fTitle" required placeholder="例：パンフレット制作"></div>
+<div><label for="fAmount">金額（税込・円）</label><input id="fAmount" type="number" min="0" step="1" required inputmode="numeric"></div>
+<div><label for="fNo">請求書番号（任意）</label><input id="fNo"></div>
+<div><label for="fIssued">請求日</label><input id="fIssued" type="date" required></div>
+<div><label for="fDue">入金期日</label><input id="fDue" type="date" required></div>
+</div>
+<label for="fMemo">メモ（任意）</label><input id="fMemo" placeholder="例：担当は田中さん">
+<div class="row"><button class="pri" value="save">保存</button><button value="cancel" formnovalidate>やめる</button></div>
+</form></dialog>
+
+<dialog id="msgDlg">
+<h2>催促の文面</h2>
+<div class="sub" id="msgInfo"></div>
+<label for="tone">文面の強さ</label>
+<select id="tone"><option value="0">期日前のお知らせ</option><option value="1">やわらかい確認（遅れ 1〜6日）</option><option value="2">再度のお願い（遅れ 7〜13日）</option><option value="3">期限を決めてお願い（遅れ 14日以上）</option></select>
+<label for="msg">文面（自由に直せます）</label><textarea id="msg"></textarea>
+<div class="row"><button class="pri" id="copyBtn">コピーする</button><button id="closeMsg">閉じる</button></div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY="nyukin-mihariban-v1";
+let S={me:"",bank:"",items:[]};
+try{const raw=localStorage.getItem(KEY);if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("この端末では保存できませんでした")}};
+const $=id=>document.getElementById(id);
+const yen=n=>Number(n||0).toLocaleString("ja-JP")+"円";
+const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
+const parse=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const jp=s=>{const d=parse(s);return(d.getMonth()+1)+"月"+d.getDate()+"日"};
+const late=it=>Math.round((today()-parse(it.due))/86400000);   // 期日を何日過ぎたか（マイナスは期日前）
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(t){const e=$("toast");e.textContent=t;e.classList.add("on");setTimeout(()=>e.classList.remove("on"),1800)}
+
+function status(it){
+  if(it.paid)return{cls:"ok",text:"入金済み"+(it.paidOn?"（"+jp(it.paidOn)+"）":""),rank:9e9};
+  const d=late(it);
+  if(d>0)return{cls:"bad",text:"期日を "+d+"日 過ぎています",rank:-d};
+  if(d===0)return{cls:"warn",text:"今日が期日",rank:0.5};
+  if(d>=-3)return{cls:"warn",text:"期日まであと "+(-d)+"日",rank:-d};
+  return{cls:"",text:"期日まであと "+(-d)+"日",rank:-d};
+}
+function render(){
+  const open=S.items.filter(i=>!i.paid),over=open.filter(i=>late(i)>0);
+  const sum=a=>a.reduce((s,i)=>s+Number(i.amount||0),0);
+  $("sum").innerHTML='<div><span class="sub">未入金</span><b>'+yen(sum(open))+'</b><span class="sub">'+open.length+'件</span></div>'+
+    '<div class="'+(over.length?"bad":"")+'"><span class="sub">期日を過ぎたもの</span><b>'+yen(sum(over))+'</b><span class="sub">'+over.length+'件</span></div>'+
+    '<div><span class="sub">入金済み</span><b>'+yen(sum(S.items.filter(i=>i.paid)))+'</b><span class="sub">'+S.items.filter(i=>i.paid).length+'件</span></div>';
+  const items=[...S.items].sort((a,b)=>status(a).rank-status(b).rank);
+  $("list").innerHTML=items.length?items.map(it=>{const st=status(it);return'<div class="item"><div class="top"><div><span class="name">'+esc(it.client)+'</span>　'+esc(it.title)+(it.no?' <span class="sub">'+esc(it.no)+'</span>':'')+'</div><div class="amt">'+yen(it.amount)+'</div></div>'+
+    '<div class="sub">請求 '+jp(it.issued)+'／期日 '+jp(it.due)+(it.memo?'／'+esc(it.memo):'')+'</div>'+
+    '<div class="row" style="margin-top:6px"><span class="badge '+st.cls+'">'+st.text+'</span>'+
+    (it.paid?'<button class="sm" data-a="unpay" data-id="'+it.id+'">未入金に戻す</button>':'<button class="sm" data-a="msg" data-id="'+it.id+'">催促の文面</button><button class="sm" data-a="pay" data-id="'+it.id+'">入金を確認した</button>')+
+    '<button class="sm" data-a="edit" data-id="'+it.id+'">直す</button><button class="sm" data-a="del" data-id="'+it.id+'">消す</button></div></div>'}).join(""):'<div class="empty">まだ請求がありません。「＋ 請求を追加」から登録してください。</div>';
+  $("me").value=S.me;$("bank").value=S.bank;
+}
+let editing=null,msgItem=null;
+function openEdit(it){
+  editing=it||null;$("editTitle").textContent=it?"請求を直す":"請求を追加";
+  const t=today(),due=new Date(t);due.setMonth(due.getMonth()+1);
+  $("fClient").value=it?.client||"";$("fTitle").value=it?.title||"";$("fAmount").value=it?.amount??"";$("fNo").value=it?.no||"";
+  $("fIssued").value=it?.issued||iso(t);$("fDue").value=it?.due||iso(due);$("fMemo").value=it?.memo||"";
+  $("editDlg").showModal();
+}
+$("editForm").addEventListener("submit",e=>{
+  if(e.submitter&&e.submitter.value!=="save")return;
+  const v={client:$("fClient").value.trim(),title:$("fTitle").value.trim(),amount:Number($("fAmount").value),no:$("fNo").value.trim(),issued:$("fIssued").value,due:$("fDue").value,memo:$("fMemo").value.trim()};
+  if(editing)Object.assign(editing,v);else S.items.push(Object.assign({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),paid:false},v));
+  save();render();
+});
+function compose(it,tone){
+  const me=S.me||"（あなたの名前）",d=late(it),no=it.no?"（請求書番号："+it.no+"）":"";
+  const body="ご請求の内容：「"+it.title+"」"+no+"\n請求金額："+yen(it.amount)+"（税込）\n請求日："+jp(it.issued)+"\nお支払期日："+jp(it.due);
+  const bank=S.bank?"\n\nお振込先："+S.bank:"";
+  const limit=new Date(today());limit.setDate(limit.getDate()+7);
+  const head=it.client+"\nご担当者様\n\nいつもお世話になっております。"+me+"です。\n\n";
+  const tail="\n\nどうぞよろしくお願いいたします。\n\n"+me;
+  if(tone===0)return"件名：お支払期日のご案内（"+it.title+"）\n\n"+head+"下記のご請求について、お支払期日が近づいてまいりましたので、念のためご案内いたします。\n\n"+body+bank+"\n\nすでにお手続きいただいている場合は、行き違いですのでご容赦ください。"+tail;
+  if(tone===1)return"件名：ご入金のご確認のお願い（"+it.title+"）\n\n"+head+"下記のご請求について、本日時点でご入金の確認ができておりません。\nお手数ですが、ご状況をご確認いただけますでしょうか。\n\n"+body+bank+"\n\n本メールと行き違いでお手続きいただいている場合は、何とぞご容赦ください。"+tail;
+  if(tone===2)return"件名：【再度のお願い】ご入金のご確認（"+it.title+"）\n\n"+head+"先日ご連絡いたしました下記のご請求について、お支払期日から"+Math.max(d,1)+"日が過ぎておりますが、まだご入金の確認ができておりません。\n\n"+body+bank+"\n\nお手数をおかけしますが、お支払いのご予定日をご返信いただけますでしょうか。\nご事情がおありの場合は、遠慮なくご相談ください。"+tail;
+  return"件名：【重要】お支払いのお願い（"+it.title+"）\n\n"+head+"下記のご請求について、お支払期日から"+Math.max(d,1)+"日が過ぎておりますが、現在もご入金を確認できておりません。\n\n"+body+bank+"\n\n恐れ入りますが、"+jp(iso(limit))+"までに、お支払い、またはお支払いのご予定日のご連絡をお願いいたします。\nすでにお手続き済みの場合は、お振込日をお知らせいただけますと幸いです。"+tail;
+}
+function openMsg(it){
+  msgItem=it;const d=late(it),tone=d<=0?0:d<7?1:d<14?2:3;
+  $("tone").value=tone;$("msgInfo").textContent=it.client+"／"+it.title+"／"+yen(it.amount)+"／"+status(it).text;
+  $("msg").value=compose(it,tone);$("msgDlg").showModal();
+}
+$("tone").onchange=()=>{$("msg").value=compose(msgItem,Number($("tone").value))};
+$("copyBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("msg").value);toast("コピーしました")}catch(e){$("msg").select();document.execCommand("copy");toast("コピーしました")}};
+$("closeMsg").onclick=()=>$("msgDlg").close();
+$("list").onclick=e=>{
+  const b=e.target.closest("button[data-a]");if(!b)return;const it=S.items.find(i=>i.id===b.dataset.id);if(!it)return;
+  const a=b.dataset.a;
+  if(a==="msg")return openMsg(it);
+  if(a==="edit")return openEdit(it);
+  if(a==="pay"){it.paid=true;it.paidOn=iso(today());toast("入金済みにしました")}
+  if(a==="unpay"){it.paid=false;it.paidOn=null}
+  if(a==="del"){if(b.dataset.sure){S.items=S.items.filter(i=>i!==it)}else{b.dataset.sure="1";b.textContent="本当に消す";return}}
+  save();render();
+};
+$("addBtn").onclick=()=>openEdit();
+$("me").onchange=()=>{S.me=$("me").value.trim();save()};
+$("bank").onchange=()=>{S.bank=$("bank").value.trim();save()};
+$("sampleBtn").onclick=()=>{
+  const t=today(),off=n=>{const d=new Date(t);d.setDate(d.getDate()+n);return iso(d)};
+  const mk=(client,title,amount,issued,due,paid)=>({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),client,title,amount,no:"",issued:off(issued),due:off(due),memo:"見本",paid:!!paid,paidOn:paid?off(paid):null});
+  S.items.push(mk("株式会社サンプル商事","パンフレット制作",165000,-50,-18),mk("みほんデザイン合同会社","ロゴ制作",88000,-38,-8),mk("例示フーズ株式会社","Web サイト更新（9月分）",33000,-30,-2),mk("テスト工房","商品写真の撮影",55000,-28,2),mk("サンプル建設株式会社","会社案内の原稿作成",110000,-10,20),mk("みほん商店","チラシ制作",44000,-45,-15,-12));
+  save();render();toast("見本を入れました（あとで消せます）");
+};
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$("expBtn").onclick=()=>download("nyukin-mihariban-"+iso(today())+".json",JSON.stringify(S,null,1),"application/json");
+$("csvBtn").onclick=()=>{const q=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+  download("nyukin-mihariban-"+iso(today())+".csv","﻿"+[["取引先","件名","金額","請求書番号","請求日","入金期日","状態","入金確認日","メモ"],...S.items.map(i=>[i.client,i.title,i.amount,i.no,i.issued,i.due,i.paid?"入金済み":status(i).text,i.paidOn||"",i.memo])].map(r=>r.map(q).join(",")).join("\r\n"),"text/csv")};
+$("impBtn").onclick=()=>$("impFile").click();
+$("impFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.items))throw 0;S={me:d.me||"",bank:d.bank||"",items:d.items};save();render();toast("読み込みました")}catch(err){toast("読み込めませんでした（形式が違います）")}e.target.value=""};
+render();
+</script>
+</body>
+</html>
